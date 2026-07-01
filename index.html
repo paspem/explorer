@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengantar Surat - Desa Nusantara</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8C8 50%, #7CB342 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        #gameCanvas {
+            display: block;
+            background: #7CB342;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .ui-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 10px 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            pointer-events: auto;
+        }
+
+        #score {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2E7D32;
+        }
+
+        #mission {
+            font-size: 14px;
+            color: #555;
+            max-width: 250px;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 8px 20px;
+            font-size: 13px;
+            color: #555;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            color: white;
+            text-align: center;
+        }
+
+        #startScreen h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #startScreen p {
+            font-size: 16px;
+            margin-bottom: 20px;
+            max-width: 400px;
+            line-height: 1.5;
+        }
+
+        #startBtn {
+            padding: 12px 40px;
+            font-size: 20px;
+            background: #FFC107;
+            color: #333;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        #startBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(255, 193, 7, 0.5);
+        }
+
+        #notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 193, 7, 0.95);
+            border-radius: 15px;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            display: none;
+            z-index: 50;
+            animation: popIn 0.3s ease;
+        }
+
+        @keyframes popIn {
+            from { transform: translate(-50%, -50%) scale(0); }
+            to { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: float 20s infinite linear;
+        }
+
+        @keyframes float {
+            from { transform: translateX(-100px); }
+            to { transform: translateX(900px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="ui">
+            <div class="ui-panel">
+                <div id="score">📦 Surat: 0/5</div>
+            </div>
+            <div class="ui-panel">
+                <div id="mission">Antarkan surat ke rumah-rumah di desa!</div>
+            </div>
+        </div>
+
+        <div id="instructions">
+            🎮 Gunakan <b>WASD</b> atau <b>Arrow Keys</b> untuk bergerak | Tekan <b>SPACE</b> di dekat rumah untuk mengantar surat
+        </div>
+
+        <div id="notification"></div>
+
+        <div id="startScreen">
+            <h1>🏡 Pengantar Surat Desa</h1>
+            <p>
+                Kamu adalah seorang gadis berhijab yang bekerja sebagai pengantar surat di desa Nusantara. 
+                Antarkan semua surat ke rumah-rumah penduduk!
+            </p>
+            <button id="startBtn">Mulai Bermain</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const startBtn = document.getElementById('startBtn');
+        const scoreEl = document.getElementById('score');
+        const missionEl = document.getElementById('mission');
+        const notification = document.getElementById('notification');
+
+        // Game state
+        let gameRunning = false;
+        let score = 0;
+        let totalLetters = 5;
+        let delivered = 0;
+
+        // Camera
+        let camera = { x: 0, y: 0 };
+
+        // World size
+        const WORLD_WIDTH = 2000;
+        const WORLD_HEIGHT = 1500;
+
+        // Player
+        const player = {
+            x: WORLD_WIDTH / 2,
+            y: WORLD_HEIGHT / 2,
+            width: 30,
+            height: 40,
+            speed: 3,
+            direction: 'down',
+            frame: 0,
+            frameTimer: 0,
+            hasPackage: true,
+            animating: false
+        };
+
+        // Input
+        const keys = {};
+
+        // Houses
+        const houses = [
+            { x: 300, y: 300, width: 80, height: 70, delivered: false, color: '#8B4513', roofColor: '#D2691E', name: 'Rumah Pak RT' },
+            { x: 700, y: 200, width: 70, height: 65, delivered: false, color: '#A0522D', roofColor: '#CD853F', name: 'Rumah Bu Sari' },
+            { x: 1100, y: 400, width: 75, height: 68, delivered: false, color: '#8B4513', roofColor: '#DEB887', name: 'Rumah Pak Budi' },
+            { x: 500, y: 800, width: 80, height: 72, delivered: false, color: '#A0522D', roofColor: '#D2691E', name: 'Rumah Mbak Ani' },
+            { x: 1400, y: 700, width: 70, height: 65, delivered: false, color: '#8B4513', roofColor: '#CD853F', name: 'Rumah Pak Joko' }
+        ];
+
+        // Trees
+        const trees = [];
+        for (let i = 0; i < 40; i++) {
+            trees.push({
+                x: Math.random() * WORLD_WIDTH,
+                y: Math.random() * WORLD_HEIGHT,
+                size: 20 + Math.random() * 20,
+                type: Math.floor(Math.random() * 3)
+            });
+        }
+
+        // Rice fields
+        const riceFields = [
+            { x: 100, y: 600, width: 200, height: 150 },
+            { x: 1500, y: 200, width: 180, height: 130 },
+            { x: 800, y: 1000, width: 220, height: 160 }
+        ];
+
+        // NPCs (villagers)
+        const npcs = [
+            { x: 400, y: 500, width: 25, height: 35, direction: 'right', speed: 0.5, minX: 350, maxX: 500 },
+            { x: 900, y: 600, width: 25, height: 35, direction: 'left', speed: 0.5, minX: 800, maxX: 1000 },
+            { x: 1200, y: 900, width: 25, height: 35, direction: 'down', speed: 0.5, minY: 850, maxY: 1000 }
+        ];
+
+        // Particles
+        let particles = [];
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ') {
+                e.preventDefault();
+                tryDeliver();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        startBtn.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            gameRunning = true;
+            gameLoop();
+        });
+
+        function tryDeliver() {
+            if (!player.hasPackage) return;
+            
+            for (let house of houses) {
+                if (house.delivered) continue;
+                
+                const dx = player.x - (house.x + house.width / 2);
+                const dy = player.y - (house.y + house.height + 20);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 60) {
+                    house.delivered = true;
+                    delivered++;
+                    player.hasPackage = delivered < totalLetters;
+                    
+                    // Create celebration particles
+                    for (let i = 0; i < 20; i++) {
+                        particles.push({
+                            x: house.x + house.width / 2,
+                            y: house.y,
+                            vx: (Math.random() - 0.5) * 5,
+                            vy: -Math.random() * 5 - 2,
+                            life: 60,
+                            color: ['#FFD700', '#FF6347', '#00CED1', '#FF69B4'][Math.floor(Math.random() * 4)],
+                            size: 3 + Math.random() * 4
+                        });
+                    }
+                    
+                    showNotification(`✅ Surat diantarkan ke ${house.name}!`);
+                    scoreEl.textContent = `📦 Surat: ${delivered}/${totalLetters}`;
+                    
+                    if (delivered >= totalLetters) {
+                        setTimeout(() => {
+                            showNotification('🎉 Semua surat berhasil diantarkan! Kamu hebat!');
+                            missionEl.textContent = '🏆 Misi selesai! Terima kasih!';
+                        }, 1000);
+                    }
+                    break;
+                }
+            }
+        }
+
+        function showNotification(text) {
+            notification.textContent = text;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 2000);
+        }
+
+        function update() {
+            // Player movement
+            let moving = false;
+            let dx = 0, dy = 0;
+
+            if (keys['w'] || keys['arrowup']) { dy = -player.speed; player.direction = 'up'; moving = true; }
+            if (keys['s'] || keys['arrowdown']) { dy = player.speed; player.direction = 'down'; moving = true; }
+            if (keys['a'] || keys['arrowleft']) { dx = -player.speed; player.direction = 'left'; moving = true; }
+            if (keys['d'] || keys['arrowright']) { dx = player.speed; player.direction = 'right'; moving = true; }
+
+            // Normalize diagonal movement
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.707;
+                dy *= 0.707;
+            }
+
+            player.x += dx;
+            player.y += dy;
+
+            // World bounds
+            player.x = Math.max(20, Math.min(WORLD_WIDTH - 20, player.x));
+            player.y = Math.max(20, Math.min(WORLD_HEIGHT - 20, player.y));
+
+            // Animation
+            if (moving) {
+                player.frameTimer++;
+                if (player.frameTimer > 10) {
+                    player.frame = (player.frame + 1) % 4;
+                    player.frameTimer = 0;
+                }
+            } else {
+                player.frame = 0;
+            }
+
+            // Camera follow
+            camera.x = player.x - canvas.width / 2;
+            camera.y = player.y - canvas.height / 2;
+            camera.x = Math.max(0, Math.min(WORLD_WIDTH - canvas.width, camera.x));
+            camera.y = Math.max(0, Math.min(WORLD_HEIGHT - canvas.height, camera.y));
+
+            // Update NPCs
+            for (let npc of npcs) {
+                if (npc.direction === 'right') {
+                    npc.x += npc.speed;
+                    if (npc.x >= npc.maxX) npc.direction = 'left';
+                } else if (npc.direction === 'left') {
+                    npc.x -= npc.speed;
+                    if (npc.x <= npc.minX) npc.direction = 'right';
+                } else if (npc.direction === 'down') {
+                    npc.y += npc.speed;
+                    if (npc.y >= npc.maxY) npc.direction = 'up';
+                } else if (npc.direction === 'up') {
+                    npc.y -= npc.speed;
+                    if (npc.y <= npc.minY) npc.direction = 'down';
+                }
+            }
+
+            // Update particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2;
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Mission text
+            if (delivered < totalLetters && player.hasPackage) {
+                let nearestHouse = null;
+                let nearestDist = Infinity;
+                for (let house of houses) {
+                    if (house.delivered) continue;
+                    const d = Math.sqrt((player.x - house.x) ** 2 + (player.y - house.y) ** 2);
+                    if (d < nearestDist) {
+                        nearestDist = d;
+                        nearestHouse = house;
+                    }
+                }
+                if (nearestHouse && nearestDist < 100) {
+                    missionEl.textContent = `📍 Dekat ${nearestHouse.name} - Tekan SPACE!`;
+                } else {
+                    missionEl.textContent = 'Antarkan surat ke rumah-rumah di desa!';
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            // Draw sky gradient background
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, WORLD_HEIGHT);
+            skyGrad.addColorStop(0, '#87CEEB');
+            skyGrad.addColorStop(0.3, '#B0E0E6');
+            skyGrad.addColorStop(1, '#7CB342');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+            // Draw clouds
+            drawClouds();
+
+            // Draw rice fields
+            for (let field of riceFields) {
+                drawRiceField(field);
+            }
+
+            // Draw paths (jalan desa)
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(WORLD_WIDTH / 2 - 30, 0, 60, WORLD_HEIGHT);
+            ctx.fillRect(0, WORLD_HEIGHT / 2 - 25, WORLD_WIDTH, 50);
+
+            // Path details
+            ctx.strokeStyle = '#C4A882';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(WORLD_WIDTH / 2, 0);
+            ctx.lineTo(WORLD_WIDTH / 2, WORLD_HEIGHT);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw trees
+            for (let tree of trees) {
+                drawTree(tree);
+            }
+
+            // Draw houses
+            for (let house of houses) {
+                drawHouse(house);
+            }
+
+            // Draw NPCs
+            for (let npc of npcs) {
+                drawNPC(npc);
+            }
+
+            // Draw player
+            drawPlayer();
+
+            // Draw particles
+            for (let p of particles) {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 60;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            // Draw delivery indicators
+            for (let house of houses) {
+                if (!house.delivered) {
+                    const bobY = Math.sin(Date.now() / 300) * 5;
+                    ctx.fillStyle = '#FF6347';
+                    ctx.beginPath();
+                    ctx.arc(house.x + house.width / 2, house.y - 20 + bobY, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('!', house.x + house.width / 2, house.y - 16 + bobY);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function drawClouds() {
+            const time = Date.now() / 5000;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            for (let i = 0; i < 8; i++) {
+                const x = ((i * 300 + time * 50) % (WORLD_WIDTH + 200)) - 100;
+                const y = 50 + i * 40;
+                ctx.beginPath();
+                ctx.arc(x, y, 30, 0, Math.PI * 2);
+                ctx.arc(x + 25, y - 5, 25, 0, Math.PI * 2);
+                ctx.arc(x + 50, y, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawRiceField(field) {
+            // Field background
+            ctx.fillStyle = '#90EE90';
+            ctx.fillRect(field.x, field.y, field.width, field.height);
+            
+            // Rice rows
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < field.height; i += 15) {
+                ctx.beginPath();
+                ctx.moveTo(field.x, field.y + i);
+                ctx.lineTo(field.x + field.width, field.y + i);
+                ctx.stroke();
+            }
+
+            // Border
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(field.x, field.y, field.width, field.height);
+        }
+
+        function drawTree(tree) {
+            const { x, y, size, type } = tree;
+            
+            // Trunk
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(x - 5, y, 10, size * 0.6);
+
+            if (type === 0) {
+                // Palm tree (pohon kelapa)
+                ctx.fillStyle = '#228B22';
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2;
+                    ctx.beginPath();
+                    ctx.ellipse(x + Math.cos(angle) * size * 0.5, y - size * 0.3 + Math.sin(angle) * size * 0.3, 
+                               size * 0.6, size * 0.15, angle, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else if (type === 1) {
+                // Round tree
+                ctx.fillStyle = '#2E8B57';
+                ctx.beginPath();
+                ctx.arc(x, y - size * 0.3, size * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#3CB371';
+                ctx.beginPath();
+                ctx.arc(x - 5, y - size * 0.4, size * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // Bamboo
+                ctx.fillStyle = '#6B8E23';
+                ctx.fillRect(x - 3, y - size, 6, size);
+                ctx.fillStyle = '#556B2F';
+                for (let i = 0; i < size; i += 15) {
+                    ctx.fillRect(x - 4, y - size + i, 8, 3);
+                }
+            }
+        }
+
+        function drawHouse(house) {
+            const { x, y, width, height, color, roofColor, delivered } = house;
+            
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(x + 5, y + height + 3, width, 8);
+
+            // House body
+            ctx.fillStyle = delivered ? '#90EE90' : color;
+            ctx.fillRect(x, y + height * 0.4, width, height * 0.6);
+
+            // Roof (joglo style - segitiga)
+            ctx.fillStyle = roofColor;
+            ctx.beginPath();
+            ctx.moveTo(x - 10, y + height * 0.4);
+            ctx.lineTo(x + width / 2, y);
+            ctx.lineTo(x + width + 10, y + height * 0.4);
+            ctx.closePath();
+            ctx.fill();
+
+            // Roof details
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Door
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(x + width / 2 - 8, y + height * 0.5, 16, height * 0.5);
+
+            // Windows
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(x + 10, y + height * 0.5, 12, 12);
+            ctx.fillRect(x + width - 22, y + height * 0.5, 12, 12);
+
+            // Window frames
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 10, y + height * 0.5, 12, 12);
+            ctx.strokeRect(x + width - 22, y + height * 0.5, 12, 12);
+
+            // Delivered checkmark
+            if (delivered) {
+                ctx.fillStyle = '#2E7D32';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('✓', x + width / 2, y + height * 0.3);
+            }
+        }
+
+        function drawNPC(npc) {
+            const { x, y, width, height, direction } = npc;
+            
+            // Body
+            ctx.fillStyle = '#DEB887';
+            ctx.fillRect(x, y + height * 0.3, width, height * 0.7);
+
+            // Head
+            ctx.fillStyle = '#F5DEB3';
+            ctx.beginPath();
+            ctx.arc(x + width / 2, y + height * 0.2, width * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Hat (peci for male villagers)
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(x + width * 0.2, y - 2, width * 0.6, height * 0.15);
+
+            // Eyes
+            ctx.fillStyle = '#333';
+            const eyeOffset = direction === 'left' ? -3 : direction === 'right' ? 3 : 0;
+            ctx.beginPath();
+            ctx.arc(x + width / 2 - 4 + eyeOffset, y + height * 0.18, 2, 0, Math.PI * 2);
+            ctx.arc(x + width / 2 + 4 + eyeOffset, y + height * 0.18, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawPlayer() {
+            const { x, y, width, height, direction, frame } = player;
+            
+            const bobY = Math.sin(frame * Math.PI / 2) * 2;
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(x, y + height + 2, width * 0.6, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Body (baju panjang)
+            ctx.fillStyle = '#E91E63';
+            ctx.fillRect(x - width / 2, y + height * 0.35 + bobY, width, height * 0.65);
+
+            // Legs animation
+            const legOffset = Math.sin(frame * Math.PI / 2) * 3;
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x - width / 4, y + height + bobY, 6, 5 + legOffset);
+            ctx.fillRect(x + width / 4 - 6, y + height + bobY, 6, 5 - legOffset);
+
+            // Hijab
+            ctx.fillStyle = '#9C27B0';
+            ctx.beginPath();
+            ctx.arc(x, y + height * 0.2 + bobY, width * 0.55, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Hijab drape
+            ctx.fillStyle = '#9C27B0';
+            ctx.beginPath();
+            ctx.moveTo(x - width * 0.5, y + height * 0.2 + bobY);
+            ctx.lineTo(x - width * 0.6, y + height * 0.5 + bobY);
+            ctx.lineTo(x - width * 0.3, y + height * 0.5 + bobY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(x + width * 0.5, y + height * 0.2 + bobY);
+            ctx.lineTo(x + width * 0.6, y + height * 0.5 + bobY);
+            ctx.lineTo(x + width * 0.3, y + height * 0.5 + bobY);
+            ctx.closePath();
+            ctx.fill();
+
+            // Yellow hat on top of hijab
+            ctx.fillStyle = '#FFC107';
+            ctx.beginPath();
+            ctx.arc(x, y + bobY - 5, width * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Hat brim
+            ctx.fillStyle = '#FFD54F';
+            ctx.beginPath();
+            ctx.ellipse(x, y + bobY, width * 0.55, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Face
+            ctx.fillStyle = '#FDBCB4';
+            ctx.beginPath();
+            ctx.arc(x, y + height * 0.2 + bobY, width * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#333';
+            const eyeOffsetX = direction === 'left' ? -3 : direction === 'right' ? 3 : 0;
+            const eyeOffsetY = direction === 'up' ? -2 : direction === 'down' ? 2 : 0;
+            ctx.beginPath();
+            ctx.arc(x - 5 + eyeOffsetX, y + height * 0.18 + bobY + eyeOffsetY, 2.5, 0, Math.PI * 2);
+            ctx.arc(x + 5 + eyeOffsetX, y + height * 0.18 + bobY + eyeOffsetY, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Smile
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(x + eyeOffsetX, y + height * 0.25 + bobY + eyeOffsetY, 4, 0, Math.PI);
+            ctx.stroke();
+
+            // Blush
+            ctx.fillStyle = 'rgba(255, 150, 150, 0.5)';
+            ctx.beginPath();
+            ctx.arc(x - 8, y + height * 0.22 + bobY, 3, 0, Math.PI * 2);
+            ctx.arc(x + 8, y + height * 0.22 + bobY, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Package on back
+            if (player.hasPackage) {
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(x - width / 2 - 12, y + height * 0.3 + bobY, 12, 15);
+                ctx.fillStyle = '#D2691E';
+                ctx.fillRect(x - width / 2 - 11, y + height * 0.32 + bobY, 10, 11);
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x - width / 2 - 6, y + height * 0.3 + bobY);
+                ctx.lineTo(x - width / 2 - 6, y + height * 0.45 + bobY);
+                ctx.moveTo(x - width / 2 - 12, y + height * 0.37 + bobY);
+                ctx.lineTo(x - width / 2, y + height * 0.37 + bobY);
+                ctx.stroke();
+            }
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initial draw
+        draw();
+    </script>
+</body>
+</html>
